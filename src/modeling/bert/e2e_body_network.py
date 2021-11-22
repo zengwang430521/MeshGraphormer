@@ -11,7 +11,7 @@ class Graphormer_Body_Network(torch.nn.Module):
     '''
     End-to-end Graphormer network for human pose and mesh reconstruction from a single image.
     '''
-    def __init__(self, args, config, backbone, trans_encoder, mesh_sampler):
+    def __init__(self, args, config, backbone, trans_encoder, mesh_sampler, use_tc=False):
         super(Graphormer_Body_Network, self).__init__()
         self.config = config
         self.config.device = args.device
@@ -22,7 +22,13 @@ class Graphormer_Body_Network(torch.nn.Module):
         self.cam_param_fc = torch.nn.Linear(3, 1)
         self.cam_param_fc2 = torch.nn.Linear(431, 250)
         self.cam_param_fc3 = torch.nn.Linear(250, 3)
-        self.grid_feat_dim = torch.nn.Linear(1024, 2051)
+
+        self.use_tc = use_tc
+        if self.use_tc:
+            self.grid_feat_dim = torch.nn.Linear(512, 2051)
+            self.global_feat_dim = torch.nn.Linear(512, 2048)
+        else:
+            self.grid_feat_dim = torch.nn.Linear(1024, 2051)
 
 
     def forward(self, images, smpl, mesh_sampler, meta_masks=None, is_train=False):
@@ -54,12 +60,19 @@ class Graphormer_Body_Network(torch.nn.Module):
 
         # extract grid features and global image features using a CNN backbone
         image_feat, grid_feat = self.backbone(images)
-        # concatinate image feat and 3d mesh template
-        image_feat = image_feat.view(batch_size, 1, 2048).expand(-1, ref_vertices.shape[-2], -1)
-        # process grid features
-        grid_feat = torch.flatten(grid_feat, start_dim=2)
-        grid_feat = grid_feat.transpose(1,2)
-        grid_feat = self.grid_feat_dim(grid_feat)
+        if self.use_tc:
+            # concatinate image feat and 3d mesh template
+            image_feat = self.global_feat_dim(image_feat)
+            image_feat = image_feat.view(batch_size, 1, 2048).expand(-1, ref_vertices.shape[-2], -1)
+            # process grid features
+            grid_feat = self.grid_feat_dim(grid_feat)
+        else:
+            # concatinate image feat and 3d mesh template
+            image_feat = image_feat.view(batch_size, 1, 2048).expand(-1, ref_vertices.shape[-2], -1)
+            # process grid features
+            grid_feat = torch.flatten(grid_feat, start_dim=2)
+            grid_feat = grid_feat.transpose(1,2)
+            grid_feat = self.grid_feat_dim(grid_feat)
         # concatinate image feat and template mesh to form the joint/vertex queries
         features = torch.cat([ref_vertices, image_feat], dim=2)
         # prepare input tokens including joint/vertex queries and grid features

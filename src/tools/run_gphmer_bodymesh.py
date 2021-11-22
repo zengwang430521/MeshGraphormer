@@ -694,6 +694,10 @@ def main(args):
             hrnet_update_config(hrnet_config, hrnet_yaml)
             backbone = get_cls_net_gridfeat(hrnet_config, pretrained=hrnet_checkpoint)
             logger.info('=> loading hrnet-v2-w64 model')
+        elif args.arch=='tcformer-small':
+            pretrained = ''
+            backbone = get_cls_net_gridfeat(hrnet_config, pretrained='')
+            logger.info('=> loading tcformer model')
         else:
             print("=> using pre-trained model '{}'".format(args.arch))
             backbone = models.__dict__[args.arch](pretrained=True)
