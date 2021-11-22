@@ -36,6 +36,8 @@ from src.utils.metric_logger import AverageMeter, EvalMetricsLogger
 from src.utils.renderer import Renderer, visualize_reconstruction, visualize_reconstruction_test
 from src.utils.metric_pampjpe import reconstruction_error
 from src.utils.geometric_layers import orthographic_projection
+from src.modeling.tcformer.pvt_v2_3h2_density_fix_sparse import tcformer_small_withneck
+
 
 from azureml.core.run import Run
 aml_run = Run.get_context()
@@ -626,7 +628,8 @@ def main(args):
     mesh_sampler = Mesh()
 
     # Renderer for visualization
-    renderer = Renderer(faces=smpl.faces.cpu().numpy())
+    # renderer = Renderer(faces=smpl.faces.cpu().numpy())
+    renderer = None
 
     # Load model
     trans_encoder = []
@@ -682,6 +685,7 @@ def main(args):
 
         
         # init ImageNet pre-trained backbone model
+        use_tc = False
         if args.arch=='hrnet':
             hrnet_yaml = 'models/hrnet/cls_hrnet_w40_sgd_lr5e-2_wd1e-4_bs32_x100.yaml'
             hrnet_checkpoint = 'models/hrnet/hrnetv2_w40_imagenet_pretrained.pth'
@@ -694,10 +698,11 @@ def main(args):
             hrnet_update_config(hrnet_config, hrnet_yaml)
             backbone = get_cls_net_gridfeat(hrnet_config, pretrained=hrnet_checkpoint)
             logger.info('=> loading hrnet-v2-w64 model')
-        elif args.arch=='tcformer-small':
-            pretrained = ''
-            backbone = get_cls_net_gridfeat(hrnet_config, pretrained='')
+        elif args.arch=='tcformer-small-neck':
+            pretrained = 'models/3h2_density0_small.pth'
+            backbone = tcformer_small_withneck(pretrained=pretrained)
             logger.info('=> loading tcformer model')
+            use_tc = True
         else:
             print("=> using pre-trained model '{}'".format(args.arch))
             backbone = models.__dict__[args.arch](pretrained=True)
@@ -712,7 +717,7 @@ def main(args):
         logger.info('Backbone total parameters: {}'.format(backbone_total_params))
 
         # build end-to-end Graphormer network (CNN backbone + multi-layer graphormer encoder)
-        _model = Graphormer_Network(args, config, backbone, trans_encoder, mesh_sampler)
+        _model = Graphormer_Network(args, config, backbone, trans_encoder, mesh_sampler, use_tc=use_tc)
 
         if args.resume_checkpoint!=None and args.resume_checkpoint!='None':
             # for fine-tuning or resume training or inference, load weights from checkpoint

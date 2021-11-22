@@ -17,6 +17,7 @@ from opendr.lighting import LambertianPointLight
 import random
 
 
+
 # Rotate the points by a specified angle.
 def rotateY(points, angle):
     ry = np.array([
@@ -256,6 +257,9 @@ def draw_text(input_image, content):
         image = image.astype(np.float32) / 255.
     return image
 
+
+# from src.utils.geometric_layers import orthographic_projection
+import torch
 def visualize_reconstruction(img, img_size, gt_kp, vertices, pred_kp, camera, renderer, color='pink', focal_length=1000):
     """Overlays gt_kp and pred_kp on img.
     Draws vert with text.
@@ -267,16 +271,32 @@ def visualize_reconstruction(img, img_size, gt_kp, vertices, pred_kp, camera, re
     # Fix a flength so i can render this with persp correct scale
     res = img.shape[1]
     camera_t = np.array([camera[1], camera[2], 2*focal_length/(res * camera[0] +1e-9)])
-    rend_img = renderer.render(vertices, camera_t=camera_t,
-                               img=img, use_bg=True,
-                               focal_length=focal_length,
-                               body_color=color)
-    rend_img = draw_text(rend_img, debug_text)
 
+
+    if renderer is not None:
+        rend_img = renderer.render(vertices, camera_t=camera_t,
+                                   img=img, use_bg=True,
+                                   focal_length=focal_length,
+                                   body_color=color)
+    else:
+        rend_img = img.copy()
+        vis_res = img.shape[1]
+        camera = camera.reshape(-1, 3)
+        vert_2d = vertices[:, :2] + camera[:, 1:]
+        vert_2d = camera[:, [0]] * vert_2d
+        valid = (vert_2d[:, 0] >= -1) * (vert_2d[:, 0] <= 1) * (vert_2d[:, 1] >= -1) * (vert_2d[:, 1] <= 1)
+        vert_2d = vert_2d[valid, :]
+        vert_2d = 0.5 * (vert_2d + 1) * (vis_res - 1)
+        vert_2d = vert_2d.astype(np.int).clip(min=0, max=vis_res - 1)
+        rend_img[vert_2d[:, 1], vert_2d[:, 0], :] = 0.5
+
+
+
+    rend_img = draw_text(rend_img, debug_text)
     # Draw skeleton
     gt_joint = ((gt_kp[:, :2] + 1) * 0.5) * img_size
     pred_joint = ((pred_kp + 1) * 0.5) * img_size
-    img_with_gt = draw_skeleton( img, gt_joint, draw_edges=False, vis=gt_vis)
+    img_with_gt = draw_skeleton(img, gt_joint, draw_edges=False, vis=gt_vis)
     skel_img = draw_skeleton(img_with_gt, pred_joint)
 
     combined = np.hstack([skel_img, rend_img])

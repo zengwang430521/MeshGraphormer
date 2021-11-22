@@ -256,7 +256,7 @@ class AttenNeckS(BaseModule):
 
         for i in range(1, len(input_dicts)):
             input_dicts[i]['x'] = input_dicts[i]['x'] + downup(input_dicts[i], input_dicts[i-1])
-            input_dicts[i]['x'] = self.merge_blocks[i](input_dicts[i], gather_dict, input_dicts[i])
+            input_dicts[i]['x'] = self.merge_blocks[i-1](input_dicts[i], gather_dict, input_dicts[i])
         out = input_dicts[-1]['x']
         return out
 
